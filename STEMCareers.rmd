@@ -1,0 +1,468 @@
+---
+title: "STEM Careers"
+author: "DG"
+date: "4/26/2021"
+header-includes:
+- \usepackage{pdflscape}
+- \newcommand{\blandscape}{\begin{landscape}}
+- \newcommand{\elandscape}{\end{landscape}}
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+The purpose of this project is to ``
+
+## Loading data
+
+Load in the data sets for the
+
+```{r reading, message=FALSE}
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(xlsx)
+library(XML) 
+library(flextable)
+library(tibble)
+set_flextable_defaults(fonts_ignore=TRUE)
+
+dataTotal <- data.frame(read.xlsx2("./DataInTotal.xlsx", 
+                                   colClasses=rep("numeric",24), sheetIndex = 1))
+dataGender <- data.frame(read.xlsx2("./DataByGender.xlsx",  
+                                    colClasses=rep("numeric",25), sheetIndex = 1))
+
+# change all zero and NaN values to NA in both datasets
+dataTotal <- na_if(dataTotal, 0)
+dataGender <- na_if(dataGender, 0)
+dataTotal <- replace(dataTotal, is.na(dataTotal), NA)
+dataGender <- replace(dataGender, is.na(dataGender), NA)
+```
+
+## Summary Statistics for Full Data Sets
+``` {r summarystats}
+
+statsGender <- data.table()
+
+Mean <- dataTotal %>% summarize(across(ArtsMatch:STEMMatch, ~ mean(.x, na.rm=TRUE)))
+Median <- dataTotal %>% summarize(across(ArtsMatch:STEMMatch, ~ median(.x, na.rm=TRUE)))
+SD <- dataTotal %>% summarize(across(ArtsMatch:STEMMatch, ~ sd(.x, na.rm=TRUE)))
+statsTotal <- as.data.frame(cbind(t(Mean[1,]), t(Median[1,]), t(SD[1,])))
+names(statsTotal) <- c("Mean", "Median", "SD")
+
+MeanMale <- dataGender %>% filter(Gender==1) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                              ~ mean(.x, na.rm=TRUE)))
+MedianMale <- dataGender %>% filter(Gender==1) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                                    ~ median(.x, na.rm=TRUE)))
+SDMale <- dataGender %>% filter(Gender==1) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                                ~ sd(.x, na.rm=TRUE)))
+statsGender <- as.data.frame(cbind(t(MeanMale[1,]), t(MedianMale[1,]), t(SDMale[1,])))
+names(statsGender) <- c("Mean", "Median", "SD")
+row.names(statsGender) <- paste(row.names(statsGender), " (Male)")
+
+MeanFemale <- dataGender %>% filter(Gender==2) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                              ~ mean(.x, na.rm=TRUE)))
+MedianFemale <- dataGender %>% filter(Gender==2) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                                    ~ median(.x, na.rm=TRUE)))
+SDFemale <- dataGender %>% filter(Gender==2) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                                ~ sd(.x, na.rm=TRUE)))
+statsGender2 <- as.data.frame(cbind(t(MeanFemale[1,]), t(MedianFemale[1,]), t(SDFemale[1,])))
+names(statsGender2) <- c("Mean", "Median", "SD")
+row.names(statsGender2) <- paste(row.names(statsGender2), " (Female)")
+statsGender <- rbind(statsGender, statsGender2)
+
+```
+
+Table 1: Summary statistics for the data without gender included
+```{r results='asis'}
+ft<- flextable(statsTotal %>% rownames_to_column("Name"))
+autofit(ft)
+```
+
+Table 2: Summary statistics for the data broken out by gender
+```{r results='asis' }
+ft<- flextable(statsGender %>% rownames_to_column("Name"))
+autofit(ft)
+```
+
+## Graph All Degree-Types by Age
+```{r TotalGraph, warning=FALSE}
+library(reshape2)
+library(ggplot2)
+meltTotal <- reshape2::melt(dataTotal, id.vars="Age", variable.name="Name", value.name = "Percentage")
+TotalPlot <- ggplot(meltTotal, aes(x=Age, y=Percentage, group=Name)) 
+TotalPlot <- TotalPlot +  geom_line(aes(color=Name)) 
+TotalPlot <- TotalPlot +  labs(title="Portion remaining in a field of work\nrelated to their degrees disregarding gender", x="Age", y="Percent remaining in field of study") 
+TotalPlot
+```
+
+## Graph All Degree-Types by Age and by Gender
+```{r GenderGraph, warning=FALSE}
+library(reshape2)
+meltGender <- reshape2::melt(dataGender, id.vars=c("Age", "Gender"), variable.name="Name", value.name = "Percentage")
+GenderPlot <- ggplot(meltGender, aes(x=Age, y=Percentage, group=Name)) 
+GenderPlot <- GenderPlot +  geom_line(aes(color=Name)) 
+GenderPlot <- GenderPlot +  labs(title="Portion remaining in a field of work\nrelated to their degrees by gender", x="Age", y="Percent remaining in field of study") 
+Gender.labs <- c("Male", "Female")
+names(Gender.labs) <- c("1", "2")  
+GenderPlot <- GenderPlot +  facet_grid(. ~Gender, labeller = labeller(Gender = Gender.labs)) 
+GenderPlot
+```
+
+## Subsetting Data for Ages 30-65
+The summary data indicated a high variance for some of the degree types and a wide range of variances across the degree-types. Both factor would make any statistical inference questionable.   
+  
+It is clear from the data that there is significant roll-off in graduate participation in their degreed field prior to the age of 30 and after 65 -- neither is surprising. At the lower end, the age when someone enters the workforce fulltime after their undergrad graduation can vary considerably. Factors delaying may include entering graduate school, delayed hiring, or taking a break. Additionally, the roll-off around 65 can be attributed to retirement.    
+  
+Therefore, the data will be subsetted to only consider ages 30-65. This should still give enough degrees of freedom perform an adequate linear fit and ensure the   
+  
+  
+```{r subsetsummary}
+dataTotalSubset <- filter(dataTotal, Age %in% 25:65)
+dataGenderSubset <- filter(dataGender, Age %in% 25:65)
+
+Mean <- dataTotalSubset %>% summarize(across(ArtsMatch:STEMMatch, ~ mean(.x, na.rm=TRUE)))
+Median <- dataTotalSubset %>% summarize(across(ArtsMatch:STEMMatch, ~ median(.x, na.rm=TRUE)))
+SD <- dataTotalSubset %>% summarize(across(ArtsMatch:STEMMatch, ~ sd(.x, na.rm=TRUE)))
+statsTotal <- as.data.frame(cbind(t(Mean[1,]), t(Median[1,]), t(SD[1,])))
+names(statsTotal) <- c("Mean", "Median", "SD")
+
+MeanMale <- dataGenderSubset %>% filter(Gender==1) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                              ~ mean(.x, na.rm=TRUE)))
+MedianMale <- dataGenderSubset %>% filter(Gender==1) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                                    ~ median(.x, na.rm=TRUE)))
+SDMale <- dataGenderSubset %>% filter(Gender==1) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                                ~ sd(.x, na.rm=TRUE)))
+statsGender <- as.data.frame(cbind(t(MeanMale[1,]), t(MedianMale[1,]), t(SDMale[1,])))
+names(statsGender) <- c("Mean", "Median", "SD")
+row.names(statsGender) <- paste(row.names(statsGender), " (Male)")
+
+MeanFemale <- dataGenderSubset %>% filter(Gender==2) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                              ~ mean(.x, na.rm=TRUE)))
+MedianFemale <- dataGenderSubset %>% filter(Gender==2) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                                    ~ median(.x, na.rm=TRUE)))
+SDFemale <- dataGenderSubset %>% filter(Gender==2) %>% summarize(across(ArtsMatch:STEMMatch, 
+                                                                ~ sd(.x, na.rm=TRUE)))
+statsGender2 <- as.data.frame(cbind(t(MeanFemale[1,]), t(MedianFemale[1,]), t(SDFemale[1,])))
+names(statsGender2) <- c("Mean", "Median", "SD")
+row.names(statsGender2) <- paste(row.names(statsGender2), " (Female)")
+statsGender <- rbind(statsGender, statsGender2)
+
+```
+Table 3: Summary statistics for the data without gender included for ages 30-65
+```{r results='asis', echo=FALSE}
+ft<- flextable(statsTotal %>% rownames_to_column("Name"))
+autofit(ft)
+```
+
+Table 4: Summary statistics for the data broken out by gender for ages 30-65
+```{r results='asis', echo=FALSE }
+ft<- flextable(statsGender %>% rownames_to_column("Name"))
+autofit(ft)
+```
+
+
+## Graph All Degree-Types by Age for Ages 30-65
+```{r TotalSubsetGraph, warning=FALSE}
+library(reshape2)
+library(ggplot2)
+meltTotalSubset <- melt(dataTotalSubset, id.vars="Age", variable.name="Name", value.name = "Percentage")
+TotalSubsetPlot <- ggplot(meltTotalSubset, aes(x=Age, y=Percentage*100, group=Name)) 
+TotalSubsetPlot <- TotalSubsetPlot +  geom_line(aes(color=Name)) 
+TotalSubsetPlot <- TotalSubsetPlot +  labs(title="Portion remaining in a field of work related to\ntheir degrees disregarding gender for Ages 30-65", x="Age", y="Percent remaining in field of study") 
+TotalSubsetPlot
+```
+
+
+## Graph All Degree-Types by Age and by Gender for Ages 30-65
+```{r GenderSubsetGraph, warning=FALSE}
+library(reshape2)
+meltGenderSubset <- reshape2::melt(dataGenderSubset, id.vars=c("Age", "Gender"), variable.name="Name", value.name = "Percentage")
+GenderSubsetPlot <- ggplot(meltGenderSubset, aes(x=Age, y=Percentage*100, group=Name)) 
+GenderSubsetPlot <- GenderSubsetPlot +  geom_line(aes(color=Name)) 
+GenderSubsetPlot <- GenderSubsetPlot +  labs(title="Portion remaining in a field of work related to \ntheir degrees by gender  for ages 30-65", x="Age", y="Percent remaining in field of study") 
+Gender.labs <- c("Male", "Female")
+names(Gender.labs) <- c("1", "2")  
+GenderSubsetPlot <- GenderSubsetPlot +  facet_grid(. ~Gender, labeller = labeller(Gender = Gender.labs)) 
+GenderSubsetPlot
+```
+  
+## Linear Regression Without Gender
+  
+The chief items of interest are to compare by degree-type:  
+  1)  the average involvement of people in a career matching their degree  
+  2)  the change in participation in a career matching their degree by age  
+  
+Use a general linear model of the form $Y_{k,i} = \beta_{k,0} + \beta_{k,1} * X_{k,i} + \epsilon_{k,i}$, where:  
+  *  $k$ : The $k$-th degree-type  
+  *  $i$ : The $i$-th data point  
+  *  $Y_{k,i}$ : The percent participation in the $k$-th degree-type at the $i$-th data point  
+  *  $X_{k,i}$ : The age of the $i$-th data point for the $k$-th degree-type  
+  *  $\beta_{k,0}$ : The intercept of the linear regressor for the $k$-th degree-type  
+  *  $\beta_{k,1}$ : The slope of the linear regressor for the $k$-th degree-type showing change in percent participation per additional year in age.   
+  *  $\epsilon_{k,i}$ : The uncharacterized noise in the system assumed to be $N\{0, \sigma^2\}$ (normally distributed with mean 0 and variance $\sigma^2$)
+
+
+```{r LinearRegression}
+
+TotalSubsetFormula <- paste0("cbind(", paste(names(dataTotalSubset)[2:24], collapse = ", "), ")", " ~ Age")
+fit <- lm(TotalSubsetFormula, dataTotalSubset)
+fitcoeff <- coef(summary(fit))
+# fitcoeff[[1]][1,4]  Here's how to pull out the p-value for the intercept for the first fit
+
+TotalSubsetCoeff <- as.data.frame(fit$coefficients)
+row.names(TotalSubsetCoeff) <- c("Beta0", "Beta1")
+TotalSubsetCoeff <- t(TotalSubsetCoeff)
+# Extract the t-values for all of the regressions
+TotalCoeff <- coef(summary(fit))
+TotalT <- data.frame()
+for(i in 1:23) {
+  tmp <- data.frame(Name = names(dataTotalSubset)[i+1], 
+                    Beta0T=TotalCoeff[[i]][1,3],
+                    Beta1T=TotalCoeff[[i]][2,3])
+  if(length(TotalT)==0) TotalT <- rbind(tmp)
+  else TotalT <- rbind(TotalT, tmp)
+}
+# Extract the p-values for all of the regressions
+TotalP <- data.frame()
+for(i in 1:23) {
+  tmp <- data.frame(Name = names(dataTotalSubset)[i+1], 
+                    Beta0P=TotalCoeff[[i]][1,4],
+                    Beta0P95Sig=TotalCoeff[[i]][1,4]<0.025,
+                    Beta1P=TotalCoeff[[i]][2,4],
+                    Beta1P95Sig=TotalCoeff[[i]][2,4]<0.025,
+                    AdjustedR2=summary(fit)[[i]]$adj.r.squared)
+  if(length(TotalP)==0) TotalP <- rbind(tmp)
+  else TotalP <- rbind(TotalP, tmp)
+}
+
+# Create the formula to pass to the linear regression for age and gender as predictors
+GenderSubsetFormula <- paste0("cbind(", paste(names(dataGenderSubset)[3:25], collapse = ", "), ")", " ~ Age * factor(Gender-1)")
+fit2 <- lm(GenderSubsetFormula, dataGenderSubset)
+
+# Extract the coefficients for all of the regressions
+GenderSubsetCoeff <- as.data.frame(fit2$coefficients)
+row.names(GenderSubsetCoeff) <- c("Beta0", "Beta1","Beta2", "Beta3")
+GenderSubsetCoeff <- t(GenderSubsetCoeff)
+# Extract the t-values for all of the regressions
+GenderCoeff <- coef(summary(fit2))
+GenderT <- data.frame()
+for(i in 1:23) {
+  tmp <- data.frame(Name = names(dataGenderSubset)[i+2], 
+                    Beta0T=GenderCoeff[[i]][1,3],
+                    Beta1T=GenderCoeff[[i]][2,3],
+                    Beta2T=GenderCoeff[[i]][3,3],
+                    Beta3T=GenderCoeff[[i]][4,3])
+  if(length(GenderT)==0) GenderT <- rbind(tmp)
+  else GenderT <- rbind(GenderT, tmp)
+}
+# Extract the p-values for all of the regressions
+GenderP <- data.frame()
+for(i in 1:23) {
+  tmp <- data.frame(Name = names(dataGenderSubset)[i+2], 
+                    Beta0P=GenderCoeff[[i]][1,4],
+                    Beta0Sig=GenderCoeff[[i]][1,4]<0.025,
+                    Beta1P=GenderCoeff[[i]][2,4],
+                    Beta1Sig=GenderCoeff[[i]][2,4]<0.025,
+                    Beta2P=GenderCoeff[[i]][3,4],
+                    Beta2Sig=GenderCoeff[[i]][3,4]<0.025,
+                    Beta3P=GenderCoeff[[i]][4,4],
+                    Beta3Sig=GenderCoeff[[i]][4,4]<0.025,
+                    AdjustedR2=summary(fit2)[[i]]$adj.r.squared)
+  if(length(GenderP)==0) GenderP <- rbind(tmp)
+  else GenderP <- rbind(GenderP, tmp)
+}
+                    
+
+```
+Table 5: Linear regression coefficients for degree-types disregarding gender for ages 30-65  
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(TotalSubsetCoeff) %>% rownames_to_column("Name"))
+autofit(ft)
+```
+  
+Table 6: Linear regression t-values for degree-types disregarding for gender for ages 30-65  
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(TotalT))
+autofit(ft)
+```
+  
+Table 7: Linear regression p-values for degree-types disregarding for gender for ages 30-65  
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(TotalP)) %>%
+          set_formatter(ft, Beta0P = function(x) formatC(x, format = "e"), 
+                        Beta1P = function(x) formatC(x, format = "e") )
+ autofit(ft)
+```  
+## Linear Regression With Gender
+The chief items of interest are to compare by degree-type:  
+  1)  the average involvement of men in a career matching their degree  
+  2)  the change in participation of men in a career matching their degree by age  
+  3)  the difference in the average involvement for women   
+  4)  the difference the slope of degree-type career by age for women  
+
+  
+Use a general linear model of the form 
+$$Y_{k,i} = \beta_{k,0} + \beta_{k,1} * X_{1,k,i} + \beta_{k,2} * X_{2,k,i} + \beta_{k,3} * X_{1,k,i} * X_{2,k,i} + \epsilon_{k,i}$$, where:  
+  *  $k$ : The $k$-th degree-type  
+  *  $i$ : The $i$-th data point  
+  *  $Y_{k,i}$ : The percent participation in the $k$-th degree-type at the $i$-th data point  
+  *  $X_{1,k,i}$ : The age of the $i$-th data point for the $k$-th degree-type  
+  *  $X_{2, k,i}$ : The gender of the $i$-th data point for the $k$-th degree-type  
+  *  $\beta_{k,0}$ : The intercept of the linear regressor for the $k$-th degree-type  
+  *  $\beta_{k,1}$ : The slope of the linear regressor for the $k$-th degree-type showing change in percent participation per additional year in age.   
+  *  $\beta_{k,2}$ : The change intercept of the linear regressor for the $k$-th degree-type due to gender  
+  *  $\beta_{k,3}$ : The change in the slope of the linear regressor due to gender for the $k$-th degree-type showing change in percent participation per additional year in age.   
+  *  $\epsilon_{k,i}$ : The uncharacterized noise in the system assumed to be $N\{0, \sigma^2\}$ (normally distributed with mean 0 and variance $\sigma^2$)  
+    
+Table 8: Linear regression coefficients for degree-types accounting for gender for ages 30-65
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(GenderSubsetCoeff) %>% rownames_to_column("Name"))
+autofit(ft)
+```
+Table 9: Linear regression t-values for degree-types accounting for gender for ages 30-65
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(GenderT))
+autofit(ft)
+```
+\newpage
+\blandscape
+Landscape
+Table 10: Linear regression p-values for degree-types accounting for gender for ages 30-65
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(GenderP)) %>%
+set_formatter(ft, Beta0P = function(x) formatC(x, format = "e"), 
+              Beta1P = function(x) formatC(x, format = "e"), 
+              Beta2P = function(x) formatC(x, format = "e"), 
+              Beta3P = function(x) formatC(x, format = "e") )
+ft<-fontsize(ft, size=8, part = "all")
+
+ autofit(ft)
+```
+\elandscape
+
+## Linear Regression for gender based mean-center from ages 30-65
+One problem with the previous analysis is that it is difficult to quantitatively determine the size of the effect gender has within the region of the data. The $\beta_0$ term is the intercept when $age = 0$ -- not directly useful because it is outside of the 30 - 65 age range.
+
+To shift the intercept to the useful age range, this analysis removes the mean of the combined male/female data for each degree-type. That means $\beta_2$ is the change in the average due to being female instead of male. For a well fit model, this should be nearly the same as the difference in means in Table 4. 
+
+``` {r gendermeancentered}
+# Remove the mean from each data column
+center_colmeans <- function(x, xcenter) {
+    x - rep(xcenter, rep.int(nrow(x), ncol(x)))
+}
+Means <-  colMeans(dataGenderSubset, na.rm = TRUE)
+dataGenderSubsetCentered <- center_colmeans(dataGenderSubset, Means)
+
+# Create the formula to pass to the linear regression for age and gender as predictors
+GenderSubsetCenteredFormula <- paste0("cbind(", paste(names(dataGenderSubset)[3:25], 
+                                                      collapse = ", "), ")", " ~ Age * factor(Gender+.5)")
+fit3 <- lm(GenderSubsetCenteredFormula, dataGenderSubsetCentered)
+
+# Extract the coefficients for all of the regressions
+GenderSubsetCenteredCoeff <- as.data.frame(fit3$coefficients)
+row.names(GenderSubsetCenteredCoeff) <- c("Beta0", "Beta1","Beta2", "Beta3")
+GenderSubsetCenteredCoeff <- t(GenderSubsetCenteredCoeff)
+# Extract the t-values for all of the regressions
+GenderCenteredCoeff <- coef(summary(fit3))
+GenderCenteredT <- data.frame()
+for(i in 1:23) {
+  tmp <- data.frame(Name = names(dataGenderSubsetCentered)[i+2],
+                    Beta0T=GenderCenteredCoeff[[i]][1,3],
+                    Beta1T=GenderCenteredCoeff[[i]][2,3],
+                    Beta2T=GenderCenteredCoeff[[i]][3,3],
+                    Beta3T=GenderCenteredCoeff[[i]][4,3])
+  if(length(GenderCenteredT)==0) GenderCenteredT <- rbind(tmp)
+  else GenderCenteredT <- rbind(GenderCenteredT, tmp)
+}
+# Extract the p-values for all of the regressions
+GenderCenteredP <- data.frame()
+for(i in 1:23) {
+  tmp <- data.frame(Name = names(dataGenderSubsetCentered)[i+2],
+                    Beta0P=GenderCenteredCoeff[[i]][1,4],
+                    Beta0Sig=GenderCenteredCoeff[[i]][1,4]<0.025,
+                    Beta1P=GenderCenteredCoeff[[i]][2,4],
+                    Beta1Sig=GenderCenteredCoeff[[i]][2,4]<0.025,
+                    Beta2P=GenderCenteredCoeff[[i]][3,4],
+                    Beta2Sig=GenderCenteredCoeff[[i]][3,4]<0.025,
+                    Beta3P=GenderCenteredCoeff[[i]][4,4],
+                    Beta3Sig=GenderCenteredCoeff[[i]][4,4]<0.025,
+                    AdjustedR2=summary(fit3)[[i]]$adj.r.squared)
+  if(length(GenderCenteredP)==0) GenderCenteredP <- rbind(tmp)
+  else GenderCenteredP <- rbind(GenderCenteredP, tmp)
+}
+
+
+```
+  
+    
+Table 11: Linear regression coefficients for degree-types accounting for gender for ages 30-65 centered on the means
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(GenderSubsetCenteredCoeff) %>% rownames_to_column("Name"))
+autofit(ft)
+```
+  
+Table 12: Linear regression t-values for degree-types accounting for gender for ages 30-65 centered on the means
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(GenderCenteredT))
+autofit(ft)
+```
+\newpage
+\blandscape
+Table 13: Linear regression p-values for degree-types accounting for gender for ages 30-65 centered on the means
+```{r results='asis', echo=FALSE }
+library(flextable)
+ft<- flextable(as.data.frame(GenderCenteredP)) %>%
+set_formatter(ft, Beta0P = function(x) formatC(x, format = "e"), 
+              Beta1P = function(x) formatC(x, format = "e"), 
+              Beta2P = function(x) formatC(x, format = "e"), 
+              Beta3P = function(x) formatC(x, format = "e") )
+ft<-fontsize(ft, size=8, part = "all")
+
+ autofit(ft)
+```
+\elandscape
+
+
+## Sorting gender effects for evaluation
+The tables below show the coefficients of linear regressions but sorted by the significance of the gender effects on either the average participation or the change in participation by age.
+
+```{r gendersorting}
+GenderSubsetCenteredCoeffSorted1 <- cbind(as.data.frame(GenderSubsetCenteredCoeff),
+                                          Beta2P=GenderCenteredP[,6], 
+                                          Beta2Sig=GenderCenteredP[,7])
+GenderSubsetCenteredCoeffSorted1 <-
+  GenderSubsetCenteredCoeffSorted1[order(GenderSubsetCenteredCoeffSorted1$Beta2P),]
+
+GenderSubsetCenteredCoeffSorted2 <- cbind(as.data.frame(GenderSubsetCenteredCoeff),
+                                          Beta3P=GenderCenteredP[,8], 
+                                          Beta3Sig=GenderCenteredP[,9])
+GenderSubsetCenteredCoeffSorted2 <-
+  GenderSubsetCenteredCoeffSorted2[order(GenderSubsetCenteredCoeffSorted2$Beta3P),]
+```
+\newpage
+\blandscape
+Table 14: Linear regression coefficients for degree-types accounting for gender for ages 30-65 centered on the means sorted by the significance of the effect of gender on the mean of the participation rate
+```{r results='asis', echo=FALSE }
+ft<- flextable(as.data.frame(GenderSubsetCenteredCoeffSorted1) %>% rownames_to_column("Name"))
+ft <- set_formatter(ft, Beta2P = function(x) formatC(x, format = "e"))
+ft<-fontsize(ft, size=8, part = "all")
+autofit(ft)
+```
+
+\newpage  
+Table 15: Linear regression coefficients for degree-types accounting for gender for ages 30-65 centered on the means sorted by the significance of the effect of gender on the slope of the participation rate by age
+```{r results='asis', echo=FALSE }
+ft<- flextable(GenderSubsetCenteredCoeffSorted2
+               %>% rownames_to_column("Name"))  
+ft <- set_formatter(ft, Beta3P = function(x) formatC(x, format = "e"))
+ft<-fontsize(ft, size=8, part = "all")
+autofit(ft)
+```
+\elandscape
